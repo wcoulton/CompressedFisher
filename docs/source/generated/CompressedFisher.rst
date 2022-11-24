@@ -1,0 +1,23 @@
+﻿CompressedFisher
+================
+
+.. automodule:: CompressedFisher
+
+   
+   
+   
+
+   
+   
+   
+
+   
+   
+   
+
+   
+   
+   
+
+
+
