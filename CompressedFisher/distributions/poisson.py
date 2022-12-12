@@ -111,8 +111,7 @@ class poissonFisher(baseFisher):
         self.rate_comp = None
         if not store_covmat_sims:
             self._covmat_sims = None
-        else:
-            self.n_sims_covmat = covmat_sims.shape[0]
+        self.n_sims_covmat = covmat_sims.shape[0]
 
     def initailize_deriv_sims(self,dic_deriv_sims=None,dict_param_steps=None,deriv_rate_function=None):
         if dic_deriv_sims is None:
@@ -253,7 +252,7 @@ class poissonFisher(baseFisher):
     def _compute_compressed_fisher_matrix_error(self,params_names=None):
         if params_names is None: params_names = self.params_names
         n_params = len(params_names)       
-        if not self._has_deriv_sims or self._deriv_spline_order is None:
+        if not self._has_deriv_sims or self._deriv_spline_order is None or self._deriv_spline_order in [0,1]:
             raise AssertionError('Currently only implemented for sims given at the finite difference splines. Needed to est. covariance of derivatives. ')
         fisher_err = np.zeros([n_params,n_params])
         

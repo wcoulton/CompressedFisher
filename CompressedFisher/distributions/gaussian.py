@@ -179,8 +179,7 @@ class gaussianFisher(baseFisher):
         self.covmat_comp = None
         if not store_covmat_sims:
             self._covmat_sims = None
-        else:
-            self.n_sims_covmat = covmat_sims.shape[0]
+        self.n_sims_covmat = covmat_sims.shape[0]
         if self.include_deriv_covmat and self._mean_comp is None:
             self.initailize_mean(covmat_sims)
 
@@ -485,7 +484,7 @@ class gaussianFisher(baseFisher):
 
     def _compute_compressed_fisher_matrix_mean_and_covmat_error(self,params_names):
         n_params = len(params_names)
-        if not self._has_deriv_sims or self._deriv_spline_order is None:
+        if not self._has_deriv_sims or self._deriv_spline_order is None or self._deriv_spline_order in [0,1]:
             raise AssertionError('Currently only implemented for sims given at the finite difference splines. Needed to est. covariance of derivatives. ')
         fisher_err = np.zeros([n_params,n_params])
         
