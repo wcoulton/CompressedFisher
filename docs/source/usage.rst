@@ -14,3 +14,7 @@ To use CompressedFisher, first install it using pip:
 
 It requires *numpy* and *scipy* packages.
 
+Examples
+------------
+
+In the *examples* folder are three 
