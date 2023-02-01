@@ -6,17 +6,49 @@ from ..fisher import baseFisher,central_difference_weights
 
 
 class gaussianFisher(baseFisher):
-    def __init__(self,param_names,n_sims_derivs,include_deriv_covmat=False,n_sims_covmat=None,deriv_spline_order=None):
+    def __init__(self,param_names,n_sims_derivs,include_covmat_param_depedence=False,n_sims_covmat=None,deriv_finite_dif_accuracy=None):
+        """
+        The class provides tools for computing fisher forecasts when the data is described by a Gaussian distribution. 
+        It is designed to handle data in the following format:
+        A vector of measurements, x, of dimension, d, described
+        x ~ Gaussian (\mu(\theta),\Sigma(\theta))
+        where \mu is a vector of length d giving the mean for each observation and \Sigma is the covariance of the observations.
         
+        Many common cases have observations with parameter dependent means, but parameter indepedent covariance matricies.
+        Thus to facilitate such analyses this class can either include or not the parameter dependent covariance with the include_covmat_param_depedence option
+
+
+        A common workflow will look like this (see the docs and examples for details on the methods)
+
+        call the method:  initailize_covmat  
+        call the method:  initailize_mean              
+        call the method:  initailize_deriv_sims
+        call the method:  generate_deriv_sim_splits
+        
+        compute Fisher forecats: e.g. with the method compute_fisher_forecast
+
+        Note the expected format of the simulated derivatives will be the of the form: 
+        (n_sims_derivs,dimension) or (n_sims_derivs,deriv_spline_index,dimension)
+        The first form is used when your input is realizations of the derivatives themselves.
+        However simulated derivatives are often obtain by (central) finite differences with different orders for different accuracy.
+        For example commonly a second order spline is used, i.e.,f(\theta+\delta\theta)-f(\theta-\delta\theta)/(2 \delta \theta).
+        If working with this type of output set deriv_finite_dif_accuracy to the accuracy of central difference (the above example is order 2)
+        otherwise leave deriv_finite_dif_accuracy as none. The code will compute the finite differences. This is the preferred mode of operation
+        
+        Args:
+            param_names ([list of strings]): A list of the names of the parameters under consideration
+            n_sims_derivs ([int]): The total number of derivative simulations available. This is assumed to be the same for all the parameters
+            deriv_finite_dif_accuracy ([int]): The order of the accuracy of the finite difference derivatives. Leave as none if not using the code to evaluate finite differences   [description] (default: `None`)
+        """     
         
         self.param_names = param_names
-        self.include_deriv_covmat = include_deriv_covmat
+        self._include_covmat_param_depedence = include_covmat_param_depedence
 
 
         self.n_sims_derivs = n_sims_derivs
         self.n_sims_covmat = n_sims_covmat
 
-        self._deriv_spline_order = deriv_spline_order
+        self._deriv_finite_dif_accuracy = deriv_finite_dif_accuracy
         self._n_params = len(self.param_names)
         self._deriv_mean_fisher = None
         self._deriv_covmat_fisher = None
@@ -49,6 +81,13 @@ class gaussianFisher(baseFisher):
 
     @property
     def covmat_fisher(self):
+        """
+        Access the covariance matrix used in the Fisher forecasting
+        
+        Returns:
+            [DxD matrix]: The covariance matrix used in the fisher analysis. 
+        
+        """
         if (self._covmat_fisher is None):
             raise AssertionError('Need to initailize Fisher covmat first')
         return self._covmat_fisher
@@ -68,6 +107,13 @@ class gaussianFisher(baseFisher):
 
     @property
     def covmat_comp(self):
+        """
+        Access the covariance matrix used in the compression operation
+        
+        Returns:
+            [DxD matrix]: The compression covariance matrix
+        
+        """
         if (self._covmat_comp is None):
             raise AssertionError('Need to initailize compression covmat first')
         return self._covmat_comp
@@ -82,11 +128,19 @@ class gaussianFisher(baseFisher):
             self._covmat_comp = np.cov(self._covmat_sims[ids].T)
             n_sims_covmat,self.dim =  self._covmat_sims[ids].shape
             self._hartlap_comp= (n_sims_covmat-self.dim-2)/(n_sims_covmat-1)
-        if self.include_deriv_covmat:
+        if self._include_covmat_param_depedence:
             self.initailize_mean(self._covmat_sims[ids])
 
     @property
     def deriv_mean_fisher(self):
+        """
+        Access the derivatives of the mean used in the fisher forecasting.
+        This is computed from the fraction of simulations assigned to the fisher analysis 
+        
+        Returns:
+            [dict]: a dictionary containing the derivatives of the mean with respect to each parameter.
+                    
+        """
         if (self._deriv_mean_fisher is None):
             warnings.warn('No division of sims given. All sims will be used in the compression')
             self.deriv_mean_fisher = None
@@ -96,13 +150,21 @@ class gaussianFisher(baseFisher):
     def deriv_mean_fisher(self,ids):
         self._deriv_mean_fisher = {}
         for n in self.param_names:
-            self._deriv_mean_fisher[n]=np.mean(self.get_deriv_mean_sims(n,ids),axis=0)
+            self._deriv_mean_fisher[n]=np.mean(self._get_deriv_mean_sims(n,ids),axis=0)
         self._deriv_sim_ids = ids
         return self._deriv_mean_fisher
 
 
     @property
     def deriv_mean_comp(self):
+        """
+        Access the derivatives of the mean used in the compression steps
+        This is computed from the fraction of simulations assigned to the compression.
+        
+        Returns:
+            [dict]: a dictionary containing the derivatives of the mean with respect to each parameter.
+                    
+        """
         if (self._deriv_mean_comp is None):
             warnings.warn('No division of sims given. All sims will be used in the compression')
             self.deriv_mean_comp = None
@@ -112,7 +174,7 @@ class gaussianFisher(baseFisher):
     def deriv_mean_comp(self,ids):
         self._deriv_mean_comp = {}
         for n in self.param_names:
-            self._deriv_mean_comp[n]=np.mean(self.get_deriv_mean_sims(n,ids),axis=0)
+            self._deriv_mean_comp[n]=np.mean(self._get_deriv_mean_sims(n,ids),axis=0)
 
         return self._deriv_mean_comp
 
@@ -120,6 +182,14 @@ class gaussianFisher(baseFisher):
 
     @property
     def deriv_covmat_fisher(self):
+        """
+        Access the derivatives of the covariance matrix used in the fisher forecasting
+        This is computed from the fraction of simulations assigned to the fisher analysis 
+        
+        Returns:
+            [dict]: a dictionary containing the derivatives of the mean with respect to each parameter.
+                    
+        """
         if (self._deriv_covmat_fisher is None):
             warnings.warn('No division of sims given. All sims will be used in the compression')
             self.deriv_covmat_fisher = None
@@ -129,16 +199,16 @@ class gaussianFisher(baseFisher):
     def deriv_covmat_fisher(self,ids):
         self._deriv_covmat_fisher = {}
         for param_name in self.param_names:
-            if self._has_deriv_sims is False or self._deriv_spline_order is None:
+            if self._has_deriv_sims is False or self._deriv_finite_dif_accuracy is None:
                 self._deriv_covmat_fisher[param_name]=np.mean(self.get_deriv_covmat_sims(param_name,ids),axis=0)
             else:
                 sims = self._dict_deriv_sims[param_name]
                 if ids is not None:
                     sims = sims[:,ids]
-                if self._deriv_finite_dif_weights is None:
+                if self.deriv_finite_dif_weights is None:
                     self.initailize_spline_weights()
                 sim_covs = 0
-                for finite_dif_index,finite_dif_weight in enumerate(self._deriv_finite_dif_weights[param_name]):
+                for finite_dif_index,finite_dif_weight in enumerate(self.deriv_finite_dif_weights[param_name]):
                     sim_covs+=finite_dif_weight/self._dict_param_steps[param_name]*np.cov(sims[finite_dif_index].T)
                 self._deriv_covmat_fisher[param_name] =sim_covs
         self._deriv_sim_ids = ids
@@ -147,6 +217,13 @@ class gaussianFisher(baseFisher):
 
     @property
     def deriv_covmat_comp(self):
+        """
+        Access the derivatives of the covariance matrix used in the compression step
+        This is computed from the fraction of simulations assigned to the compression step
+        
+        Returns:
+            [dict]: a dictionary containing the derivatives of the mean with respect to each parameter.
+        """
         if (self._deriv_covmat_comp is None):
             warnings.warn('No division of sims given. All sims will be used in the compression')
             self.deriv_covmat_comp = None
@@ -156,16 +233,16 @@ class gaussianFisher(baseFisher):
     def deriv_covmat_comp(self,ids):
         self._deriv_covmat_comp = {}
         for param_name in self.param_names:
-            if self._has_deriv_sims is False or self._deriv_spline_order is None:
+            if self._has_deriv_sims is False or self._deriv_finite_dif_accuracy is None:
                 self._deriv_covmat_comp[param_name]=np.mean(self.get_deriv_covmat_sims(param_name,ids),axis=0)
             else:
                 sims = self._dict_deriv_sims[param_name]
                 if ids is not None:
                     sims = sims[:,ids]
-                if self._deriv_finite_dif_weights is None:
+                if self.deriv_finite_dif_weights is None:
                     self.initailize_spline_weights()
                 sim_covs = 0
-                for finite_dif_index,finite_dif_weight in enumerate(self._deriv_finite_dif_weights[param_name]):
+                for finite_dif_index,finite_dif_weight in enumerate(self.deriv_finite_dif_weights[param_name]):
                     sim_covs+=finite_dif_weight/self._dict_param_steps[param_name]*np.cov(sims[finite_dif_index].T)
                 self._deriv_covmat_comp[param_name] =sim_covs
         return self._deriv_covmat_comp
@@ -173,6 +250,17 @@ class gaussianFisher(baseFisher):
 
 
     def initailize_covmat(self,covmat_sims,store_covmat_sims=False):
+        """
+        This function supplies the estimator with the simulations used to compute the covariance matrix.
+        If  store_covmat_sims is False then all the simulations are used in both the compression and the fisher estimation.
+        The bias from this has generally found to be small and subdominant to that from the derivatives and for most cases this 
+        is the recommended approach.  
+        This can be relaxed by setting store_variance_sims to True and using the generate_covmat_sim_splits to split simulations.
+        
+        Args:
+            covmat_sims (matrix [N_sims x Dimension]): The simulations used to compute the covariance matrix.
+            store_covmat_sims (bool): Whether to store the covmat sims in the objects. (default: `False`)
+        """
         self._store_covmat_sims = store_covmat_sims
         self._covmat_sims = covmat_sims
         self.covmat_fisher = None
@@ -180,10 +268,17 @@ class gaussianFisher(baseFisher):
         if not store_covmat_sims:
             self._covmat_sims = None
         self.n_sims_covmat = covmat_sims.shape[0]
-        if self.include_deriv_covmat and self._mean_comp is None:
+        if self._include_covmat_param_depedence and self._mean_comp is None:
             self.initailize_mean(covmat_sims)
 
-    def initailize_mean(self,mean_sims):
+    def initailize_mean(self,mean_sims): 
+        """
+        This function supplies the estimator with the simulations used to compute the mean. There are no issues if these are the same sims as the covmat. sims.
+
+        
+        Args:
+            mean (matrix [N_sims x Dimension]): The simulations used to compute the mean.
+        """
         self._mean_comp = np.mean(mean_sims,axis=0)
 
     def initailize_deriv_sims(self,dic_deriv_sims=None,dict_param_steps=None,deriv_mean_function=None,deriv_covmat_function=None):
@@ -191,18 +286,18 @@ class gaussianFisher(baseFisher):
             assert(deriv_mean_function is not None)
             self._has_deriv_sims = False
             self._deriv_mean_function = deriv_mean_function
-            if self.include_deriv_covmat:
+            if self._include_covmat_param_depedence:
                 assert(deriv_covmat_function is not None)
                 self._deriv_covmat_function = deriv_covmat_function
         else:
             self._has_deriv_sims = True
             self._dict_deriv_sims = dic_deriv_sims
-            if self._deriv_spline_order is not None:
+            if self._deriv_finite_dif_accuracy is not None:
                 assert(dict_param_steps is not None)
                 self._dict_param_steps = dict_param_steps
 
 
-    def get_deriv_mean_sims(self,param_name,ids):
+    def _get_deriv_mean_sims(self,param_name,ids):
         if not self._has_deriv_sims:
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
@@ -215,12 +310,12 @@ class gaussianFisher(baseFisher):
         else:
             sims = self._dict_deriv_sims[param_name]
             if ids is not None:
-                if self._deriv_spline_order is None:
+                if self._deriv_finite_dif_accuracy is None:
                     sims = sims[ids]
                 else:
                     sims = sims[:,ids]
-            if self._deriv_spline_order is not None:
-                if self._deriv_finite_dif_weights is None:
+            if self._deriv_finite_dif_accuracy is not None:
+                if self.deriv_finite_dif_weights is None:
                     self.initailize_spline_weights()
                 sims = np.einsum('i,ijk->jk', self.deriv_finite_dif_weights[param_name],sims)/self._dict_param_steps[param_name]
         return sims
@@ -237,11 +332,11 @@ class gaussianFisher(baseFisher):
                 sims[i] = sim
         else:
             sims = self._dict_deriv_sims[param_name]
-            if self._deriv_spline_order is not None:
+            if self._deriv_finite_dif_accuracy is not None:
                raise AssertionError("If finite difference sims are passed, it is easier to compute the covariance matrix of p+delta and at p-delta and compute the derivative")
 
             if ids is not None:
-                if self._deriv_spline_order is None:
+                if self._deriv_finite_dif_accuracy is None:
                     sims = sims[ids]
                 else:
                     sims = sims[:,ids]
@@ -253,7 +348,7 @@ class gaussianFisher(baseFisher):
     def _apply_deriv_split(self,ids_comp,ids_fish):
         self.deriv_mean_comp = ids_comp
         self.deriv_mean_fisher = ids_fish
-        if self.include_deriv_covmat:
+        if self._include_covmat_param_depedence:
             self.deriv_covmat_comp = ids_comp
             self.deriv_covmat_fisher = ids_fish
 
@@ -265,10 +360,22 @@ class gaussianFisher(baseFisher):
 
 
     def compress_vector(self,vector,with_mean=True):
+        """
+        Apply the compression to a data vector. 
+        The optimal compression requires the mean to be subtracted, however in the Fisher forecast this term drops out so the compression 
+        can be performed without this subtraction. This also minimizes the noise in the fisher estimate.
+
+        Args:
+            vector ((..., Dimension)): The data vector (can be multidimensional but the last dimension should be the dimension of the mean).
+            with_mean (bool): Subtract the mean or not (True)
+        
+        Returns:
+            [vector (..., n_parameters)]: The compressed data vector (the compression is performed on the last axis)
+        """
         if with_mean:
             assert(self._mean_comp is not None)
 
-        if self.include_deriv_covmat:
+        if self._include_covmat_param_depedence:
             if self._mean_comp is None:
                 raise AssertionError('For compression with parameter dependent cov mat. we require the mean')
             return self._compress_mean_and_covmat(vector)
@@ -298,26 +405,26 @@ class gaussianFisher(baseFisher):
 
         return results
 
-    def compute_deriv_mu_covmat(self,params_names,input_ids=False):
+    def _compute_deriv_mu_covmat(self,params_names,input_ids=False):
         n_params = len(params_names)
         if input_ids is False:
             input_ids = self._deriv_sim_ids
         for i,n1 in enumerate(params_names):
-            derivs1_ens = self.get_deriv_mean_sims(n1,input_ids)
+            derivs1_ens = self._get_deriv_mean_sims(n1,input_ids)
             derivs1_mn = np.mean(derivs1_ens,axis=0)
             if i==0:
                 nSims = derivs1_ens.shape[0]
                 
                 deriv_covmat = np.zeros([n_params,n_params,self.dim,self.dim])
             for j,n2 in enumerate(params_names[:i+1]):
-                derivs2_ens = self.get_deriv_mean_sims(n2,input_ids)
+                derivs2_ens = self._get_deriv_mean_sims(n2,input_ids)
                 derivs2_mn = np.mean(derivs2_ens,axis=0)
                 deriv_covmat[i,j] = deriv_covmat[j,i]= 1/(nSims-1)*np.einsum('ij,ik->jk',(derivs1_ens-derivs1_mn),(derivs2_ens-derivs2_mn) )
         return deriv_covmat/nSims
 
     def _compute_fisher_matrix(self,params_names=None):
         if params_names is None: params_names = self.params_names
-        if self.include_deriv_covmat:
+        if self._include_covmat_param_depedence:
             return self._compute_fisher_matrix_mean_and_covmat(params_names)
         else:
             return self._compute_fisher_matrix_mean_only(params_names)
@@ -349,7 +456,7 @@ class gaussianFisher(baseFisher):
 
     def _compute_fisher_matrix_error(self,params_names=None):
         if params_names is None: params_names = self.params_names
-        if self.include_deriv_covmat:
+        if self._include_covmat_param_depedence:
             return self._compute_fisher_matrix_mean_and_covmat_error(params_names)
         else:
             return self._compute_fisher_matrix_mean_only_error(params_names)
@@ -358,7 +465,7 @@ class gaussianFisher(baseFisher):
         n_params = len(params_names)
 
 
-        derivs_covMat = self.compute_deriv_mu_covmat(params_names)
+        derivs_covMat = self._compute_deriv_mu_covmat(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
         #hartlap_fac = (nSimsCovMat-nKs-2)/(nSimsCovMat-1)
@@ -410,7 +517,7 @@ class gaussianFisher(baseFisher):
             return .5*fisher_err
 
 
-        derivs_covMat = self.compute_deriv_mu_covmat(params_names)
+        derivs_covMat = self._compute_deriv_mu_covmat(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
         #hartlap_fac = (nSimsCovMat-nKs-2)/(nSimsCovMat-1)
@@ -425,7 +532,7 @@ class gaussianFisher(baseFisher):
 
     def _compute_compressed_fisher_matrix(self,params_names=None):
         if params_names is None: params_names = self.params_names
-        if self.include_deriv_covmat:
+        if self._include_covmat_param_depedence:
             return self._compute_compressed_fisher_matrix_mean_and_covmat(params_names)
         else:
             return self._compute_compressed_fisher_matrix_mean_only(params_names)
@@ -457,7 +564,7 @@ class gaussianFisher(baseFisher):
 
     def _compute_compressed_fisher_matrix_error(self,params_names=None):
         if params_names is None: params_names = self.params_names
-        if self.include_deriv_covmat:
+        if self._include_covmat_param_depedence:
             return self._compute_compressed_fisher_matrix_mean_and_covmat_error(params_names)
         else:
             return self._compute_compressed_fisher_matrix_mean_only_error(params_names)
@@ -466,7 +573,7 @@ class gaussianFisher(baseFisher):
         n_params = len(params_names)
 
 
-        derivs_covMat = self.compute_deriv_mu_covmat(params_names)
+        derivs_covMat = self._compute_deriv_mu_covmat(params_names)
 
         compressed_covmat = self.compress_vector(self.covmat_fisher,with_mean=False)
         compressed_covmat = self.compress_vector(compressed_covmat.T,with_mean=False)
@@ -484,7 +591,7 @@ class gaussianFisher(baseFisher):
 
     def _compute_compressed_fisher_matrix_mean_and_covmat_error(self,params_names):
         n_params = len(params_names)
-        if not self._has_deriv_sims or self._deriv_spline_order is None or self._deriv_spline_order in [0,1]:
+        if not self._has_deriv_sims or self._deriv_finite_dif_accuracy is None or self._deriv_finite_dif_accuracy in [0,1]:
             raise AssertionError('Currently only implemented for sims given at the finite difference splines. Needed to est. covariance of derivatives. ')
         fisher_err = np.zeros([n_params,n_params])
         
@@ -497,7 +604,7 @@ class gaussianFisher(baseFisher):
                 derivs_comp_covMat = np.zeros([n_params,self._n_params,n_fisher_sims])
 
             compressed_deriv_ens = 0
-            for finite_dif_index,finite_dif_weight in enumerate(self._deriv_finite_dif_weights[param_name]):
+            for finite_dif_index,finite_dif_weight in enumerate(self.deriv_finite_dif_weights[param_name]):
                 tmp = self.compress_vector(sims[finite_dif_index])
                 compressed_deriv_ens+=finite_dif_weight/self._dict_param_steps[param_name]*tmp
 

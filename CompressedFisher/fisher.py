@@ -57,7 +57,7 @@ class baseFisher(object):
         if dict_param_spline_weights is None:
             self._deriv_finite_dif_weights ={}
             for param_name in self.param_names:
-                self._deriv_finite_dif_weights[param_name] = central_difference_weights[self._deriv_spline_order]
+                self._deriv_finite_dif_weights[param_name] = central_difference_weights[self._deriv_finite_dif_accuracy]
         else:
             self._deriv_finite_dif_weights=dict_param_spline_weights
 
