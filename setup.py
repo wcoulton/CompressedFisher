@@ -7,7 +7,7 @@ setup(
     url='https://github.com/wcoulton/CompressedFisher',
     author='Will Coulton',
     license='BSD 2-clause',
-    packages=['CompressedFisher'],
+    packages=['CompressedFisher','CompressedFisher.distributions'],
     install_requires=[
                       'numpy',
                       'scipy'                  

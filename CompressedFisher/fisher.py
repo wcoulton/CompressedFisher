@@ -190,9 +190,28 @@ class baseFisher(object):
         return np.linalg.inv(self._compute_combined_fisher_matrix(params_names))
 
 
-    def run_fisher_deriv_stablity_test(self,params_names,sample_fractions=None,verbose=True,max_repeats=None):
+    def run_fisher_deriv_stablity_test(self,params_names,sample_fractions=None,verbose=False,max_repeats=None):
+        """
+        This function provides a second means to test the convergence of the standard Fisher forecasts.
+        Fisher forecasts are performed using only a subset of the total available set of derivative simulations (as set by sample_fractions).
+        If the size of the forecasts increases rapidly with the number of simulations, it is a sign that the Fisher forecast is not converged.
+        
+        For small subsets the Fisher forecast is repeated using as different divisions, by default all the possibe divissions. Eg. 2 for a sample_fraction of 1/2.
+
+        Args:
+            params_names ([list of names]): A list of the parameters to consider in the Fisher forecast
+            sample_fractions (array of floats): An array of fractions (between 0 and 1) specifing the subsets of the total number of simulations to consider.
+                                                If no arguement is given, use a default set of (1/10,1/5,1/3,2/5,1/2,1)  (default: `None`)
+            verbose (bool): Print the Fisher forecast values for each sample fraction as they are evaluated (default: `False`)
+            max_repeats (int): Limit the number of subdivisions to consider. E.g. for a sample fraction of 0.1 there are 10 divisions of the data. 
+                               Leaving this as None will use all 10, however setting it to say 3 would mean only 3 of these are considered. (default: `None`)
+        
+        Returns:
+            3 arrays : The number of simulations at each sample_fraction, the mean fisher information at each sample_fraction and the error on the mean fisher information (computed using the subsets)
+        """
         if sample_fractions is None:
             sample_fractions = np.array([.1,.2,1./3.,.4,.5,1.])
+        sample_fractions = np.atleast_1d(sample_fractions)
         n_params = len(params_names)
         nSims = np.zeros(sample_fractions.shape[0])
         mns  = np.zeros([sample_fractions.shape[0],n_params,n_params ])
@@ -216,7 +235,28 @@ class baseFisher(object):
             if verbose: print(f"{nSims[i]} \n {np.diag(mns[i])**.5} \n {np.diag(stds[i])**.5}")
         return nSims,mns,stds
 
-    def run_compressed_fisher_deriv_stablity_test(self,params_names,compress_fraction,sample_fractions=None,verbose=True,max_repeats=None):
+    def run_compressed_fisher_deriv_stablity_test(self,params_names,compress_fraction,sample_fractions=None,verbose=False,max_repeats=None):
+        """
+        This function provides a second means to test the convergence of the compressed Fisher forecasts.
+        The compressed fisher forecasts are performed using only a subset of the total available set of derivative simulations (as set by sample_fractions).
+        If the size of the forecasts increases rapidly with the number of simulations, it is a sign that the Fisher forecast is not converged.
+        If the size of the compressed decreases wit the number of simulations, it is actually a sing the compressed forecast is reliable 
+
+        For small subsets the Fisher forecast is repeated using as different divisions, by default all the possibe divissions. Eg. 2 for a sample_fraction of 1/2.
+
+        Args:
+            params_names ([list of names]): A list of the parameters to consider in the Fisher forecast
+            compress_fraction (float) : The fraction of the total sims used in the compression.
+            sample_fractions (array of floats): An array of fractions (between 0 and 1) specifing the subsets of the total number of simulations to consider.
+                                                If no arguement is given, use a default set of (1/10,1/5,1/3,2/5,1/2,1)  (default: `None`)
+            verbose (bool): Print the Fisher forecast values for each sample fraction as they are evaluated (default: `False`)
+            max_repeats (int): Limit the number of subdivisions to consider. E.g. for a sample fraction of 0.1 there are 10 divisions of the data. 
+                               Leaving this as None will use all 10, however setting it to say 3 would mean only 3 of these are considered. (default: `None`)
+        
+        Returns:
+            3 arrays : The number of simulations at each sample_fraction, the mean fisher information at each sample_fraction and the error on the mean fisher information (computed using the subsets)
+        """
+
         if sample_fractions is None:
             sample_fractions = np.array([.1,.2,1./3.,.4,.5,1.])
         n_params = len(params_names)
@@ -248,7 +288,27 @@ class baseFisher(object):
         return nSims,mns,stds
 
 
-    def run_combined_fisher_deriv_stablity_test(self,params_names,compress_fraction,sample_fractions=None,verbose=True,max_repeats=None):
+    def run_combined_fisher_deriv_stablity_test(self,params_names,compress_fraction,sample_fractions=None,verbose=False,max_repeats=None):
+        """
+        This function provides a second means to test the convergence of the compbined Fisher forecasts.
+        The combined fisher forecasts are performed using only a subset of the total available set of derivative simulations (as set by sample_fractions).
+        The combined forecast should be roughly constant to changes of the number of simulations, when it is converged.
+
+        For small subsets the Fisher forecast is repeated using as different divisions, by default all the possibe divissions. Eg. 2 for a sample_fraction of 1/2.
+
+        Args:
+            params_names ([list of names]): A list of the parameters to consider in the Fisher forecast
+            compress_fraction (float) : The fraction of the total sims used in the compression.
+            sample_fractions (array of floats): An array of fractions (between 0 and 1) specifing the subsets of the total number of simulations to consider.
+                                                If no arguement is given, use a default set of (1/10,1/5,1/3,2/5,1/2,1)  (default: `None`)
+            verbose (bool): Print the Fisher forecast values for each sample fraction as they are evaluated (default: `False`)
+            max_repeats (int): Limit the number of subdivisions to consider. E.g. for a sample fraction of 0.1 there are 10 divisions of the data. 
+                               Leaving this as None will use all 10, however setting it to say 3 would mean only 3 of these are considered. (default: `None`)
+        
+        Returns:
+            3 arrays : The number of simulations at each sample_fraction, the mean fisher information at each sample_fraction and the error on the mean fisher information (computed using the subsets)
+        """
+
         if sample_fractions is None:
             sample_fractions = np.array([.1,.2,1./3.,.4,.5,1.])
 
@@ -282,6 +342,22 @@ class baseFisher(object):
 
 
     def compute_compressed_fisher_forecast_wShuffle(self,params_names,compress_fraction,nShuffles=10,verbose=False):
+        """ 
+        Computes the compressed fisher parameter constraints and this version uses repeated estimates (with the number given by nShuffles)
+        where for each repeat the sims are shuffled and redivded between the compression and fisher estimation. 
+
+        This reduces the variance of the estimator, but requires more simulations for it to be valid.
+        
+        
+        Args:
+            params_names ([list]): list of the parameters that you want to included in the Fisher forecast. 
+            compress_fraction (float): the fraction (between 0 and 1) of the simulations to use for the compression
+            nShuffles (int): the number of times to iterate. Each iteration redivides the simulations and reestimates the fisher constraints
+        
+        Returns:
+            [np.array([n_params,n_params])]: An matrix or size ([n_params,n_params]) with the forecast Fisher covariance matrix.
+        """
+
         n_params = len(params_names)
         results  = np.zeros([nShuffles,n_params,n_params ])
         for i in range(nShuffles):
@@ -297,6 +373,22 @@ class baseFisher(object):
 
 
     def compute_combined_fisher_forecast_wShuffles(self,params_names,compress_fraction,nShuffles=10,verbose=False):
+        """ 
+        Computes the combined fisher parameter constraints and this version uses repeated estimates (with the number given by nShuffles)
+        where for each repeat the sims are shuffled and redivded between the compression and fisher estimation. 
+
+        This reduces the variance of the estimator, but requires more simulations for it to be unbiased.
+        
+        
+        Args:
+            params_names ([list]): list of the parameters that you want to included in the Fisher forecast. 
+            compress_fraction (float): the fraction (between 0 and 1) of the simulations to use for the compression
+            nShuffles (int): the number of times to iterate. Each iteration redivides the simulations and reestimates the fisher constraints
+        
+        Returns:
+            [np.array([n_params,n_params])]: An matrix or size ([n_params,n_params]) with the forecast Fisher covariance matrix.
+        """
+
         n_params = len(params_names)
         results  = np.zeros([nShuffles,n_params,n_params ])
         for i in range(nShuffles):
@@ -315,6 +407,28 @@ class baseFisher(object):
 
 
     def run_combined_wShuffles_fisher_deriv_stablity_test(self,params_names,compress_fraction,nShuffles=10,sample_fractions=None,verbose=True,max_repeats=None):
+        """
+        This function provides a second means to test the convergence of the compbined Fisher forecasts using the reshuffling.
+        There is an iterative step, where for each of nShuffles repeats the sims are shuffled and redivded between the compression and fisher estimation. 
+        The combined fisher forecasts are performed using only a subset of the total available set of derivative simulations (as set by sample_fractions).
+        The combined forecast should be roughly constant to changes of the number of simulations, when it is converged.
+
+        For small subsets the Fisher forecast is repeated using as different divisions, by default all the possibe divissions. Eg. 2 for a sample_fraction of 1/2.
+
+        Args:
+            params_names ([list of names]): A list of the parameters to consider in the Fisher forecast
+            compress_fraction (float) : The fraction of the total sims used in the compression.
+            nShuffles (int): The number of redivisions of the simulations between compression and Fisher estimation to perform.
+            sample_fractions (array of floats): An array of fractions (between 0 and 1) specifing the subsets of the total number of simulations to consider.
+                                                If no arguement is given, use a default set of (1/10,1/5,1/3,2/5,1/2,1)  (default: `None`)
+            verbose (bool): Print the Fisher forecast values for each sample fraction as they are evaluated (default: `False`)
+            max_repeats (int): Limit the number of subdivisions to consider. E.g. for a sample fraction of 0.1 there are 10 divisions of the data. 
+                               Leaving this as None will use all 10, however setting it to say 3 would mean only 3 of these are considered. (default: `None`)
+        
+        Returns:
+            3 arrays : The number of simulations at each sample_fraction, the mean fisher information at each sample_fraction and the error on the mean fisher information (computed using the subsets)
+        """
+
         if sample_fractions is None:
             sample_fractions = np.array([.1,.2,1./3.,.4,.5,1.])
 
@@ -349,20 +463,3 @@ class baseFisher(object):
                 stds[i] = np.std(repeats_sfracs,axis=0)*np.sqrt(1/(len(repeats_sfracs)-1))
             if verbose: print(f"{nSims[i]} \n {np.diag(mns[i])**.5} \n {np.diag(stds[i])**.5}")
         return nSims,mns,stds
-
-        #return np.linalg.inv(np.mean(results,axis=0))
-    # def compute_compressed_fisher_forecast_wFolds(self,params_names,compress_fraction,nFolds=10,verbose=False):
-    #     n_params = len(params_names)
-    #     results  = np.zeros([nFolds,n_params,n_params ])
-    #     for i in range(nFolds):
-    #         ids_all = np.arange(self.n_sims_derivs)
-    #         np.random.shuffle(ids_all)
-    #         ids_comp = ids_all[:int(self.n_sims_derivs*compress_fraction)]
-    #         ids_fish = ids_all[int(self.n_sims_derivs*compress_fraction):]
-    #         self._apply_deriv_split(ids_comp,ids_fish)
-    #         results[i] = self._compute_compressed_fisher_matrix(params_names)
-    #     if verbose==True: 
-    #         print(np.diag(np.mean(results,axis=0))**.5,np.diag(np.std(results,axis=0))**.5) 
-    #     return np.linalg.inv(np.mean(results,axis=0))
-
-

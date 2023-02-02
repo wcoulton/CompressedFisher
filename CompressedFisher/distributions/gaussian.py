@@ -200,7 +200,7 @@ class gaussianFisher(baseFisher):
         self._deriv_covmat_fisher = {}
         for param_name in self.param_names:
             if self._has_deriv_sims is False or self._deriv_finite_dif_accuracy is None:
-                self._deriv_covmat_fisher[param_name]=np.mean(self.get_deriv_covmat_sims(param_name,ids),axis=0)
+                self._deriv_covmat_fisher[param_name]=np.mean(self._get_deriv_covmat_sims(param_name,ids),axis=0)
             else:
                 sims = self._dict_deriv_sims[param_name]
                 if ids is not None:
@@ -234,7 +234,7 @@ class gaussianFisher(baseFisher):
         self._deriv_covmat_comp = {}
         for param_name in self.param_names:
             if self._has_deriv_sims is False or self._deriv_finite_dif_accuracy is None:
-                self._deriv_covmat_comp[param_name]=np.mean(self.get_deriv_covmat_sims(param_name,ids),axis=0)
+                self._deriv_covmat_comp[param_name]=np.mean(self._get_deriv_covmat_sims(param_name,ids),axis=0)
             else:
                 sims = self._dict_deriv_sims[param_name]
                 if ids is not None:
@@ -320,7 +320,7 @@ class gaussianFisher(baseFisher):
                 sims = np.einsum('i,ijk->jk', self.deriv_finite_dif_weights[param_name],sims)/self._dict_param_steps[param_name]
         return sims
 
-    def get_deriv_covmat_sims(self,param_name,ids):
+    def _get_deriv_covmat_sims(self,param_name,ids):
         if not self._has_deriv_sims:
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)

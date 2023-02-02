@@ -266,7 +266,7 @@ class poissonFisher(baseFisher):
         return fisher
    
 
-    def compute_deriv_rate_covar(self,params_names,input_ids=False):
+    def _compute_deriv_rate_covar(self,params_names,input_ids=False):
         n_params = len(params_names)
         if input_ids is False:
             input_ids = self._deriv_sim_ids
@@ -289,7 +289,7 @@ class poissonFisher(baseFisher):
         n_params = len(params_names)
 
 
-        derivs_covMat = self.compute_deriv_rate_covar(params_names)
+        derivs_covMat = self._compute_deriv_rate_covar(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
         #hartlap_fac = (nSimsCovMat-nKs-2)/(nSimsCovMat-1)
