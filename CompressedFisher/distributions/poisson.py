@@ -28,9 +28,10 @@ class poissonFisher(baseFisher):
         (n_sims_derivs,dimension) or (n_sims_derivs,deriv_spline_index,dimension)
         The first form is used when your input is realizations of the derivatives themselves.
         However simulated derivatives are often obtain by (central) finite differences with different orders for different accuracy.
-        For example commonly a second order spline is used, i.e.,f(\theta+\delta\theta)-f(\theta-\delta\theta)/(2 \delta \theta).
+        For example commonly a second order spline is used, i.e., derivatives are obtain as f(\theta+\delta\theta)-f(\theta-\delta\theta)/(2 \delta \theta).
         If working with this type of output set deriv_finite_dif_accuracy to the accuracy of central difference (the above example is order 2)
-        otherwise leave deriv_finite_dif_accuracy as none. The code will compute the finite differences. This is the preferred mode of operation
+        otherwise leave deriv_finite_dif_accuracy as none. The input to the code should be the simulations at \theta+\delta\theta (\theta-\delta\theta)
+        The code will internally compute the finite differences. This is the preferred mode of operation,
         
         Args:
             param_names ([list of strings]): A list of the names of the parameters under consideration
@@ -100,7 +101,7 @@ class poissonFisher(baseFisher):
         Access the rate used in the compression
         
         Returns:
-            [D array]: The array of Poisson rates
+             [array]: The array of Poisson rates
         
         """
         if (self._deriv_rate_fisher is None):
@@ -186,6 +187,30 @@ class poissonFisher(baseFisher):
         self.n_sims_variance = variance_sims.shape[0]
 
     def initailize_deriv_sims(self,dic_deriv_sims=None,dict_param_steps=None,deriv_rate_function=None):
+        """
+        Pass the set of simulations used to estimate the derivatives. There are three modes for this:
+        1)
+        Pass a dictionary containing the simulations for finite difference derivatives. Each element should be an array of shape
+        (Number Sims, number of param step, Dimension) - where number of param steps corresponds to the points used to 
+        estimate a difference derivative. E.g. for a second order central difference index =0 should have sims at \theta-\delta\theta 
+        and index =1 should have sims at \theta+\delta\theta.
+        If this mode is used dict_param_steps should be supplied and will be a dictionary containing the step size for each parameter.
+        This is the preferred mode of operation for the code.
+        2)
+        Pass a dictionary containing the simulations of the derivatives themselves. Each element should be an array of shape
+        (Number Sims, Dimension)
+        3)
+        Pass a function, deriv_rate_function, which takes as arguments the parameter name and the sim id and returns the derivative for that simulation.
+        The return should be an array of shape (dimension)
+
+
+        
+        Args:
+            dic_deriv_sims ([dictionary]): A dictionary containing the either simulations for computing finite differences for each parameter or a dictionary of the derivatives for each parameter. The key for the dictionary should be the parameter name. Needed for mode 1 or 2. (default: `None`)
+            dict_param_steps ([dictionary]): A dictionary of the parmaeter step sizes. Only needed for mode 1) (default: `None`)
+            deriv_rate_function ([function]): A function that returns the derivative for a single realizaiton. Arguments of the function are parameter name and sim index. Only needed for mode 3  (default: `None`)
+        """
+
         if dic_deriv_sims is None:
             assert(deriv_rate_function is not None)
             self._has_deriv_sims = False
@@ -198,6 +223,17 @@ class poissonFisher(baseFisher):
                 self._dict_param_steps = dict_param_steps
 
     def _get_deriv_rate_sims(self,param_name,ids):
+        """
+        A helper function for accessing the derivative of the mean simulations.
+        This function returns a subset of the total derivative simulations
+        
+        Args:
+            param_name ([string]): The name of the parameter with which the derivative is respect to 
+            ids ([list]): The list of sim ids indexing the derivatives
+        
+        Returns:
+             array of shape (len(ids),dimension) : the subset of derivative realizations
+        """
         if not self._has_deriv_sims:
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
@@ -223,11 +259,29 @@ class poissonFisher(baseFisher):
 
 
     def _apply_deriv_split(self,ids_comp,ids_fish):
+        """
+        Use the given set of ids for the compression and the seperate set for the fisher calculation to compute the 
+        deriviates for the fisher forecast
+
+        
+        Args:
+            ids_comp ([list]): A list of ids of the simulations to be used to compute the compressions
+            ids_fish ([list]): A list of ids of the simulations to be used to compute the fisher forecast
+        """
         self.deriv_rate_comp = ids_comp
         self.deriv_rate_fisher = ids_fish
 
 
     def _apply_covmat_split(self,ids_fish,ids_comp):
+        """
+        Use the given set of ids for the compression and the seperate set for the fisher calculation to compute the 
+        variance for the fisher forecast. Typically spliting these simulations is not necessary so ids_fish=ids_comp =all the variance sims.
+
+        
+        Args:
+            ids_comp ([list]): A list of ids of the simulations to be used to compute the compressions
+            ids_fish ([list]): A list of ids of the simulations to be used to compute the fisher forecast
+        """
         self.variance_fisher = ids_fish
         self.rate_comp = ids_comp
 
@@ -238,6 +292,7 @@ class poissonFisher(baseFisher):
         Apply the compression to a data vector. 
         The optimal compression requires the rate to be subtracted, however in the Fisher forecast this term drops out so the compression 
         can be performed without this subtraction. This also minimizes the noise in the fisher estimate.
+        The compression is computed using Eq. 41 in Coulton and Wandelt.
 
         Args:
             vector ((..., Dimension)): The data vector (can be multidimensional but the last dimension should be the dimension of the rate).
@@ -252,11 +307,21 @@ class poissonFisher(baseFisher):
             data = data -self._rate_comp
         for i,n in enumerate(self.param_names):
             deriv = self.deriv_rate_comp[n]/self.rate_comp
-            # np.sum((data-mu)*mu_deriv[i],axis=-1)
+
             results[:,i]= np.sum(data*deriv,axis=-1)
         return results
 
     def _compute_fisher_matrix(self,params_names=None):
+        """
+        Compute the Fisher matrix, with the standard approach.
+        This is computed with Eq. 40 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The Fisher information.
+        """
         if params_names is None: params_names = self.params_names
         n_params = len(params_names)
         fisher = np.zeros([n_params,n_params])
@@ -267,6 +332,16 @@ class poissonFisher(baseFisher):
    
 
     def _compute_deriv_rate_covar(self,params_names,input_ids=False):
+        """
+        Compute the covariance of the derivatives. This is used to estimate the bias to the Fisher information
+        
+        Args:
+            params_names ([list]): The names of the derivatives to use.
+            input_ids (bool): The set of ids used to compute the variance. If none use the simulations assigned to the fisher calculation. (default: `False`)
+        
+        Returns:
+            A matrix with shape (n_params,n_params, dimension, dimension): The covariance of the derivative simulations
+        """
         n_params = len(params_names)
         if input_ids is False:
             input_ids = self._deriv_sim_ids
@@ -284,6 +359,16 @@ class poissonFisher(baseFisher):
         return deriv_covmat/nSims
 
     def _compute_fisher_matrix_error(self,params_names=None):
+        """
+        Estimate the bias to the Fisher matrix
+        This is computed with Eq. 6 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the calculation. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The  bias to the Fisher information.
+        """
         if params_names is None: params_names = self.params_names
 
         n_params = len(params_names)
@@ -292,7 +377,7 @@ class poissonFisher(baseFisher):
         derivs_covMat = self._compute_deriv_rate_covar(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
-        #hartlap_fac = (nSimsCovMat-nKs-2)/(nSimsCovMat-1)
+        
         for i in range(n_params):
             for j in range(i+1):
                 fisher_err[i,j] = fisher_err[j,i] = np.sum(derivs_covMat[i,j]*self.variance_fisher/self.rate_comp/self.rate_comp)
@@ -300,7 +385,17 @@ class poissonFisher(baseFisher):
 
 
 
-    def _compute_compressed_fisher_matrix(self,params_names=None):
+    def _compute_compressed_fisher_matrix(self,params_names=None): 
+        """
+        Compute the compressed Fisher matrix.
+        This is computed with Eq. 10 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the calculation. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The bias to the Fisher information.
+        """
         if params_names is None: params_names = self.params_names
         n_params = len(params_names)
         fisher = self._compute_fisher_matrix(params_names)
@@ -313,6 +408,16 @@ class poissonFisher(baseFisher):
         return fisher_comp
    
     def _compute_compressed_fisher_matrix_error(self,params_names=None):
+        """
+        Compute the bias to the compressed Fisher matrix.
+        This is computed with Eq. 11 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The bias to the Fisher information.
+        """
         if params_names is None: params_names = self.params_names
         n_params = len(params_names)       
         if not self._has_deriv_sims or self._deriv_finite_dif_accuracy is None or self._deriv_finite_dif_accuracy in [0,1]:
@@ -333,8 +438,6 @@ class poissonFisher(baseFisher):
                 compressed_deriv_ens+=finite_dif_weight/self._dict_param_steps[param_name]*tmp
 
             compressed_rate_mean = self.compress_vector(self.deriv_rate_fisher[param_name],with_rate=False)
-            #comp_up = #compression(nSimsCovMat,comp_deriv_sims_deriv_est[:,0,i],mu,covMat_full_est,deriv_mu_compressor,deriv_covmat_compressor)
-            #comp_down = #compression(nSimsCovMat,comp_deriv_sims_deriv_est[:,1,i],mu,covMat_full_est,deriv_mu_compressor,deriv_covmat_compressor)
             derivs_comp_covMat[i] =(compressed_deriv_ens-compressed_rate_mean).T
 
     

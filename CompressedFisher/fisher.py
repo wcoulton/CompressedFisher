@@ -27,6 +27,15 @@ class baseFisher(object):
 
 
     def _get_deriv_split_indices(self,f_split):
+        """
+        A function to compute get the ids of the two splits of the derivative simulations
+        
+        Args:
+            f_split ([float]): Fraction of sims (between 0 and 1)to assign to split 0 and split 1
+        
+        Returns:
+            [list,list]: Two lists containing the simulations assigned to split 0 and split 1
+        """
         indices = np.arange(self.n_sims_derivs)
         np.random.shuffle(indices)
         ids_a = indices[:int(self.n_sims_derivs*f_split)]
@@ -34,6 +43,15 @@ class baseFisher(object):
         return ids_a,ids_b
 
     def _get_covmat_split_indices(self,f_split):
+        """
+        A function to compute get the ids of the two splits of the covariance matrix simulations
+        
+        Args:
+            f_split ([float]): Fraction of sims (between 0 and 1)to assign to split 0 and split 1
+        
+        Returns:
+            [list,list]: Two lists containing the simulations assigned to split 0 and split 1
+        """
         indices = np.arange(self.n_sims_covmat)
         np.random.shuffle(indices)
         ids_a = indices[:int(self.n_sims_covmat*f_split)]
@@ -108,6 +126,17 @@ class baseFisher(object):
 
 
     def _compressed_fisher_matrix(self,compressed_derivs,compressed_covmat):
+        """
+        Compute the compressed fisher matrix using eq. 10 in Coulton and Wandelt
+
+        
+        Args:
+            compressed_derivs ([matrix n_params, dimension): The compressed derivatives for each parametered
+            compressed_covmat ([matrix dimension, dimension]): The comprsesed covariance matrix
+        
+        Returns:
+            [matrix n_params, n_params]: The compressed fisher information.
+        """
         n_params = compressed_derivs.shape[0]
         fisher = np.zeros([n_params,n_params])
         for i in range(n_params):
@@ -118,6 +147,7 @@ class baseFisher(object):
     def compute_fisher_forecast(self,params_names):
         """
         Compute the standard fisher forecast parameter covariances
+        Eq. 5 in Coulton and Wandelt
         
         Args:
             params_names ([list]): A list of which parameters to include in the forecast.
@@ -132,6 +162,7 @@ class baseFisher(object):
         Estimate the bias to the standard fisher forecast parameter variances. 
         The ratio of this to the parameter *variances* gives a measure of whether there are enough
         simulations for the forecast to be converged
+        Computed Eq. 6 and Eq. 42. in Coulton and Wandelt
         
         Args:
             params_names ([list]): Parameters to include in the fisher forecast
@@ -147,6 +178,7 @@ class baseFisher(object):
     def compute_compressed_fisher_forecast(self,params_names):
         """
         Compute the compressed fisher forecast parameter covariances
+        The inverse of Eq. 10 in Coulton and Wandelt
         
         Args:
             params_names ([list]): A list of which parameters to include in the forecast.
@@ -161,6 +193,7 @@ class baseFisher(object):
         Estimate the bias to the compressed fisher forecast parameter variances. 
         The ratio of this to the compressed fisher parameter *variances* gives a measure of whether there 
         are enough simulations for the forecast to be converged.
+        Computed with Eq. 11  and Eq. 42 in Coulton and Wandelt
         
         Args:
             params_names ([list]): Parameters to include in the fisher forecast
@@ -173,13 +206,22 @@ class baseFisher(object):
         return np.linalg.solve(fish,np.linalg.solve(fish,fish_err).T)
 
     def _compute_combined_fisher_matrix(self,params_names):
+        """ Computes the combined fisher information
+        Eq. 18 in Coulton and Wandelt
+        
+        Args:
+            params_names ([list]): list of the parameters that you want to included in the Fisher forecast. 
+        
+        Returns:
+            [np.array([n_params,n_params])]: An matrix or size ([n_params,n_params]) with the Fisher information
+        """
         fisher1 = self._compute_fisher_matrix(params_names)
         fisher2 = self._compute_compressed_fisher_matrix(params_names)
         return geometricMean(fisher1,fisher2)
 
     def compute_combined_fisher_forecast(self,params_names):
         """ Computes the combined fisher parameter constraints
-        
+        The inverse of Eq. 18 in Coulton and Wandelt
         
         Args:
             params_names ([list]): list of the parameters that you want to included in the Fisher forecast. 

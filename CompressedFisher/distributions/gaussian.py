@@ -31,9 +31,10 @@ class gaussianFisher(baseFisher):
         (n_sims_derivs,dimension) or (n_sims_derivs,deriv_spline_index,dimension)
         The first form is used when your input is realizations of the derivatives themselves.
         However simulated derivatives are often obtain by (central) finite differences with different orders for different accuracy.
-        For example commonly a second order spline is used, i.e.,f(\theta+\delta\theta)-f(\theta-\delta\theta)/(2 \delta \theta).
+        For example commonly a second order spline is used, i.e., derivatives are obtain as f(\theta+\delta\theta)-f(\theta-\delta\theta)/(2 \delta \theta).
         If working with this type of output set deriv_finite_dif_accuracy to the accuracy of central difference (the above example is order 2)
-        otherwise leave deriv_finite_dif_accuracy as none. The code will compute the finite differences. This is the preferred mode of operation
+        otherwise leave deriv_finite_dif_accuracy as none. The input to the code should be the simulations at \theta+\delta\theta (\theta-\delta\theta)
+        The code will internally compute the finite differences. This is the preferred mode of operation,
         
         Args:
             param_names ([list of strings]): A list of the names of the parameters under consideration
@@ -282,6 +283,32 @@ class gaussianFisher(baseFisher):
         self._mean_comp = np.mean(mean_sims,axis=0)
 
     def initailize_deriv_sims(self,dic_deriv_sims=None,dict_param_steps=None,deriv_mean_function=None,deriv_covmat_function=None):
+        """
+        Pass the set of simulations used to estimate the derivatives. There are three modes for this:
+        1)
+        Pass a dictionary containing the simulations for finite difference derivatives. Each element should be an array of shape
+        (Number Sims, number of param step, Dimension) - where number of param steps corresponds to the points used to 
+        estimate a difference derivative. E.g. for a second order central difference index =0 should have sims at \theta-\delta\theta 
+        and index =1 should have sims at \theta+\delta\theta.
+        If this mode is used dict_param_steps should be supplied and will be a dictionary containing the step size for each parameter.
+        This is the preferred mode of operation for the code.
+        2)
+        Pass a dictionary containing the simulations of the derivatives of the mean themselves. Each element should be an array of shape
+        (Number Sims, Dimension). This cannot be used when considering a parameter dependence covariance matrix.
+        3)
+        Pass a function, deriv_mean_function, which takes as arguments the parameter name and the sim id and returns the derivative of the mean for that simulation.
+        The return should be an array of shape (dimension).
+        If you are considering a model with a parameter dependent covariance matrix you also need to pass the deriv_covmat_function, with identical inputs as the above function.
+        The return should be an array of shape (dimension x dimension).
+
+        
+        Args:
+            dic_deriv_sims ([dictionary]): A dictionary containing the either simulations for computing finite differences for each parameter or a dictionary of the derivatives for each parameter. The key for the dictionary should be the parameter name. Needed for mode 1 or 2. (default: `None`)
+            dict_param_steps ([dictionary]): A dictionary of the parmaeter step sizes. Only needed for mode 1) (default: `None`)
+            deriv_rate_function ([function]): A function that returns the derivative of the mean for a single realizaiton. Arguments of the function are parameter name and sim index. Only needed for mode 3  (default: `None`)
+            deriv_covmat_function ([function]): A function that returns the derivative of the covariance matrix for a single realizaiton. Arguments of the function are parameter name and sim index. Only needed for mode 3  (default: `None`)
+        """
+
         if dic_deriv_sims is None:
             assert(deriv_mean_function is not None)
             self._has_deriv_sims = False
@@ -297,7 +324,45 @@ class gaussianFisher(baseFisher):
                 self._dict_param_steps = dict_param_steps
 
 
+
+
+    def compress_vector(self,vector,with_mean=True):
+        """
+        Apply the compression to a data vector. 
+        The optimal compression requires the mean to be subtracted, however in the Fisher forecast this term drops out so the compression 
+        can be performed without this subtraction. This also minimizes the noise in the fisher estimate.
+        Eq. 25 in Coulton and Wandelt 
+
+        Args:
+            vector ((..., Dimension)): The data vector (can be multidimensional but the last dimension should be the dimension of the mean).
+            with_mean (bool): Subtract the mean or not (True)
+        
+        Returns:
+            [vector (..., n_parameters)]: The compressed data vector (the compression is performed on the last axis)
+        """
+        if with_mean:
+            assert(self._mean_comp is not None)
+
+        if self._include_covmat_param_depedence:
+            if self._mean_comp is None:
+                raise AssertionError('For compression with parameter dependent cov mat. we require the mean')
+            return self._compress_mean_and_covmat(vector)
+        else:
+            return self._compress_mean_only(vector,with_mean=with_mean)
+
+
     def _get_deriv_mean_sims(self,param_name,ids):
+        """
+        A helper function for accessing the derivative of the mean simulations.
+        This function returns a subset of the total derivative simulations
+        
+        Args:
+            param_name ([string]): The name of the parameter with which the derivative is respect to 
+            ids ([list]): The list of sim ids indexing the derivatives
+        
+        Returns:
+             array of shape (len(ids),dimension) : the subset of derivative realizations
+        """
         if not self._has_deriv_sims:
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
@@ -321,6 +386,17 @@ class gaussianFisher(baseFisher):
         return sims
 
     def _get_deriv_covmat_sims(self,param_name,ids):
+        """
+        A helper function for accessing the derivative of the covmat simulations.
+        This function returns a subset of the total derivative simulations
+        
+        Args:
+            param_name ([string]): The name of the parameter with which the derivative is respect to 
+            ids ([list]): The list of sim ids indexing the derivatives
+        
+        Returns:
+             array of shape (len(ids),dimension) : the subset of derivative realizations
+        """
         if not self._has_deriv_sims:
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
@@ -346,6 +422,16 @@ class gaussianFisher(baseFisher):
 
 
     def _apply_deriv_split(self,ids_comp,ids_fish):
+        """
+        Use the given set of ids for the compression and the seperate set for the fisher calculation to compute the 
+        deriviates for the fisher forecast
+
+        
+        Args:
+            ids_comp ([list]): A list of ids of the simulations to be used to compute the compressions
+            ids_fish ([list]): A list of ids of the simulations to be used to compute the fisher forecast
+        """
+
         self.deriv_mean_comp = ids_comp
         self.deriv_mean_fisher = ids_fish
         if self._include_covmat_param_depedence:
@@ -353,17 +439,25 @@ class gaussianFisher(baseFisher):
             self.deriv_covmat_fisher = ids_fish
 
     def _apply_covmat_split(self,ids_fish,ids_comp):
+        """
+        Use the given set of ids for the compression and the seperate set for the fisher calculation to compute the 
+        variance for the fisher forecast. Typically spliting these simulations is not necessary so ids_fish=ids_comp =all the variance sims.
+
+        
+        Args:
+            ids_comp ([list]): A list of ids of the simulations to be used to compute the compressions
+            ids_fish ([list]): A list of ids of the simulations to be used to compute the fisher forecast
+        """
         self.covmat_comp = ids_comp
         self.covmat_fisher = ids_fish
 
 
-
-
-    def compress_vector(self,vector,with_mean=True):
+    def _compress_mean_only(self,data,with_mean=False):
         """
-        Apply the compression to a data vector. 
+        Apply the compression to a data vector. This is the specialized function for the case of a parameter independent cov mat.
         The optimal compression requires the mean to be subtracted, however in the Fisher forecast this term drops out so the compression 
         can be performed without this subtraction. This also minimizes the noise in the fisher estimate.
+        Eq. 25 in Coulton and Wandelt with derivatives of C set to 0
 
         Args:
             vector ((..., Dimension)): The data vector (can be multidimensional but the last dimension should be the dimension of the mean).
@@ -372,17 +466,6 @@ class gaussianFisher(baseFisher):
         Returns:
             [vector (..., n_parameters)]: The compressed data vector (the compression is performed on the last axis)
         """
-        if with_mean:
-            assert(self._mean_comp is not None)
-
-        if self._include_covmat_param_depedence:
-            if self._mean_comp is None:
-                raise AssertionError('For compression with parameter dependent cov mat. we require the mean')
-            return self._compress_mean_and_covmat(vector)
-        else:
-            return self._compress_mean_only(vector,with_mean=with_mean)
-
-    def _compress_mean_only(self,data,with_mean=False):
         data = np.atleast_2d(data)
         results = np.zeros([data.shape[0],self._n_params])
         if with_mean:
@@ -393,6 +476,19 @@ class gaussianFisher(baseFisher):
         return results
 
     def _compress_mean_and_covmat(self,data):
+        """
+        Apply the compression to a data vector. This is the specialized function for the case of a parameter dependent cov mat.
+        The optimal compression requires the mean to be subtracted, however in the Fisher forecast this term drops out so the compression 
+        can be performed without this subtraction. This also minimizes the noise in the fisher estimate.
+        Eq. 25 in Coulton and Wandelt
+
+        Args:
+            vector ((..., Dimension)): The data vector (can be multidimensional but the last dimension should be the dimension of the mean).
+            with_mean (bool): Subtract the mean or not (True)
+        
+        Returns:
+            [vector (..., n_parameters)]: The compressed data vector (the compression is performed on the last axis)
+        """
         data = np.atleast_2d(data)
         results = np.zeros([data.shape[0],self._n_params])
         data = data -self._mean_comp
@@ -406,6 +502,16 @@ class gaussianFisher(baseFisher):
         return results
 
     def _compute_deriv_mu_covmat(self,params_names,input_ids=False):
+        """
+        Compute the covariance of the derivatives. This is used to estimate the bias to the Fisher information
+        
+        Args:
+            params_names ([list]): The names of the derivatives to use.
+            input_ids (bool): The set of ids used to compute the variance. If none use the simulations assigned to the fisher calculation. (default: `False`)
+        
+        Returns:
+            A matrix with shape (n_params,n_params, dimension, dimension): The covariance of the derivative simulations
+        """
         n_params = len(params_names)
         if input_ids is False:
             input_ids = self._deriv_sim_ids
@@ -423,6 +529,16 @@ class gaussianFisher(baseFisher):
         return deriv_covmat/nSims
 
     def _compute_fisher_matrix(self,params_names=None):
+        """
+        Estimate the bias to the Fisher matrix
+        This is computed with Eq. 6 and Eq. 20 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The Fisher information.
+        """
         if params_names is None: params_names = self.params_names
         if self._include_covmat_param_depedence:
             return self._compute_fisher_matrix_mean_and_covmat(params_names)
@@ -430,6 +546,17 @@ class gaussianFisher(baseFisher):
             return self._compute_fisher_matrix_mean_only(params_names)
             
     def _compute_fisher_matrix_mean_only(self,params_names):
+        """
+        The function to compute the Fisher matrix, with the standard approach, for the case of a parameter independence covariance matrix
+        This is computed with Eq. 21 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The Fisher information.
+        """
+
         if params_names is None:
             params_names = self.params_names
         n_params = len(params_names)
@@ -440,6 +567,16 @@ class gaussianFisher(baseFisher):
         return fisher
 
     def _compute_fisher_matrix_mean_and_covmat(self,params_names):
+        """
+        The function to compute the Fisher matrix, with the standard approach, for the case of a parameter dependence covariance matrix
+        This is computed with Eq. 21 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The Fisher information.
+        """
         if params_names is None:
             params_names = self.params_names
         n_params = len(params_names)
@@ -455,6 +592,16 @@ class gaussianFisher(baseFisher):
 
 
     def _compute_fisher_matrix_error(self,params_names=None):
+        """
+        Estimate the bias to the Fisher matrix
+        This is computed with Eq. 6 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the calculation. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The bias to the Fisher information.
+        """
         if params_names is None: params_names = self.params_names
         if self._include_covmat_param_depedence:
             return self._compute_fisher_matrix_mean_and_covmat_error(params_names)
@@ -462,23 +609,42 @@ class gaussianFisher(baseFisher):
             return self._compute_fisher_matrix_mean_only_error(params_names)
             
     def _compute_fisher_matrix_mean_only_error(self,params_names):
+        """
+        The function to estimate the bias to the Fisher matrix. This is the specialized case of a parameter independent covariance matrix.
+        This is computed with Eq. 6 and Eq. 23 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the calculation
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The bias to the Fisher information.
+        """
         n_params = len(params_names)
 
 
         derivs_covMat = self._compute_deriv_mu_covmat(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
-        #hartlap_fac = (nSimsCovMat-nKs-2)/(nSimsCovMat-1)
         for i in range(n_params):
             for j in range(i+1):
                 fisher_err[i,j] = fisher_err[j,i] = np.trace(np.linalg.solve(self.covmat_fisher,derivs_covMat[i,j]))*self._hartlap_fisher
         return fisher_err
 
     def _compute_fisher_matrix_mean_and_covmat_error(self,params_names):
+        """
+        The function to esimate the bias to the Fisher matrix. This is the specialized case of a parameter dependent covariance matrix.
+        This is computed with Eq. 6 and Eq. 23 in Coulton and Wandelt
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the calculation
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The  bias to the Fisher information.
+        """
         n_params = len(params_names)
 
 
-        def estBiasCovMatVar(params_names):#(nSimsCovMat,covMat_est,derivs_covMat,derivs_covMat_a,derivs_covMat_b):
+        def estBiasCovMatVar(params_names):
             ids_0 = self._deriv_sim_ids
 
             if ids_0 is None:
@@ -495,7 +661,6 @@ class gaussianFisher(baseFisher):
             derivs_covMat_a = self.deriv_covmat_fisher
             self.deriv_covmat_fisher = ids_b
             derivs_covMat_b = self.deriv_covmat_fisher
-            #print(derivs_covMat_a,derivs_covMat_b)
             # Reset derivatives
             self.deriv_covmat_fisher = ids_0
             fisher_err = np.zeros([n_params,n_params])
@@ -503,7 +668,7 @@ class gaussianFisher(baseFisher):
                 tmp_mat_a = np.linalg.solve(self.covmat_fisher,derivs_covMat[n1])*self._hartlap_fisher
                 tmp_mat_splita_a = np.linalg.solve(self.covmat_fisher,derivs_covMat_a[n1])*self._hartlap_fisher
                 tmp_mat_splitb_a = np.linalg.solve(self.covmat_fisher,derivs_covMat_b[n1])*self._hartlap_fisher
-                #tmp_mat_true_a = np.linalg.solve(covMat,deriv_cm_true[i])
+
                 for j,n2 in enumerate(params_names[:i+1]):
                     tmp_mat_b = np.linalg.solve(self.covmat_fisher,derivs_covMat[n2])*self._hartlap_fisher
                     tmp_mat_splita_b = np.linalg.solve(self.covmat_fisher,derivs_covMat_a[n2])*self._hartlap_fisher
@@ -520,7 +685,7 @@ class gaussianFisher(baseFisher):
         derivs_covMat = self._compute_deriv_mu_covmat(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
-        #hartlap_fac = (nSimsCovMat-nKs-2)/(nSimsCovMat-1)
+        
         for i in range(n_params):
             for j in range(i+1):
                 fisher_err[i,j] = fisher_err[j,i] = np.trace(np.linalg.solve(self.covmat_fisher,derivs_covMat[i,j]))*self._hartlap_fisher
@@ -531,6 +696,16 @@ class gaussianFisher(baseFisher):
 
 
     def _compute_compressed_fisher_matrix(self,params_names=None):
+        """
+        Compute the compressed Fisher matrix.
+        This is computed with Eq. 10 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The Fisher information.
+        """
         if params_names is None: params_names = self.params_names
         if self._include_covmat_param_depedence:
             return self._compute_compressed_fisher_matrix_mean_and_covmat(params_names)
@@ -538,6 +713,16 @@ class gaussianFisher(baseFisher):
             return self._compute_compressed_fisher_matrix_mean_only(params_names)
 
     def _compute_compressed_fisher_matrix_mean_only(self,params_names):
+        """
+        The function to compute the compressed Fisher matrix for the case of a parameter indepednent covariance matrix
+        This is computed with Eq. 10 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast.
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The Fisher information.
+        """
         dim_fisher = len(params_names)
         compressed_derivs = np.zeros([dim_fisher,self._n_params])
         for i,n in enumerate(params_names):
@@ -548,6 +733,16 @@ class gaussianFisher(baseFisher):
         return self._compressed_fisher_matrix(compressed_derivs,compressed_covmat)
 
     def _compute_compressed_fisher_matrix_mean_and_covmat(self,params_names):
+        """
+        The function to compute the compressed Fisher matrix for the case of a parameter depednent covariance matrix
+        This is computed with Eq. 10 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast.
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The Fisher information.
+        """
         n_params = len(params_names)
         mu_t = np.zeros([n_params,self._n_params])
         for i,n1 in enumerate(params_names):
@@ -563,6 +758,16 @@ class gaussianFisher(baseFisher):
 
 
     def _compute_compressed_fisher_matrix_error(self,params_names=None):
+        """
+        Compute the bias to the compressed Fisher matrix.
+        This is computed with Eq. 11 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The bias to the Fisher information.
+        """
         if params_names is None: params_names = self.params_names
         if self._include_covmat_param_depedence:
             return self._compute_compressed_fisher_matrix_mean_and_covmat_error(params_names)
@@ -570,6 +775,16 @@ class gaussianFisher(baseFisher):
             return self._compute_compressed_fisher_matrix_mean_only_error(params_names)
             
     def _compute_compressed_fisher_matrix_mean_only_error(self,params_names):
+        """
+        The function to compute the bias to the compressed Fisher matrix for the case of a parameter independent covariance matrix.
+        This is computed with Eq. 11 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The bias to the Fisher information.
+        """
         n_params = len(params_names)
 
 
@@ -590,6 +805,16 @@ class gaussianFisher(baseFisher):
         return fisher_err
 
     def _compute_compressed_fisher_matrix_mean_and_covmat_error(self,params_names):
+        """
+        The function to compute the bias to the compressed Fisher matrix for the case of a parameter dependent covariance matrix.
+        This is computed with Eq. 11 in Coulton and Wandelt.
+        
+        Args:
+            params_names ([list]): The list of parameters to include in the forecast. If none all parameters will be used (default: `None`)
+        
+        Returns:
+            [n_parameter x n_parameter matrix]: The bias to the Fisher information.
+        """
         n_params = len(params_names)
         if not self._has_deriv_sims or self._deriv_finite_dif_accuracy is None or self._deriv_finite_dif_accuracy in [0,1]:
             raise AssertionError('Currently only implemented for sims given at the finite difference splines. Needed to est. covariance of derivatives. ')
@@ -609,13 +834,11 @@ class gaussianFisher(baseFisher):
                 compressed_deriv_ens+=finite_dif_weight/self._dict_param_steps[param_name]*tmp
 
             compressed_deriv_mean = self.compress_vector(self.deriv_mean_fisher[param_name])
-            #comp_up = #compression(nSimsCovMat,comp_deriv_sims_deriv_est[:,0,i],mu,covMat_full_est,deriv_mu_compressor,deriv_covmat_compressor)
-            #comp_down = #compression(nSimsCovMat,comp_deriv_sims_deriv_est[:,1,i],mu,covMat_full_est,deriv_mu_compressor,deriv_covmat_compressor)
             derivs_comp_covMat[i] =(compressed_deriv_ens-compressed_deriv_mean).T
 
     
         # One factor of n_fisher_sims
-        mix_matrix = np.einsum('ijk,mnk->imjn',derivs_comp_covMat,derivs_comp_covMat)/(n_fisher_sims-1)/n_fisher_sims#(derivs_comp_covMat.shape[-1]-1)/comp_deriv_sims_deriv_est.shape[0]
+        mix_matrix = np.einsum('ijk,mnk->imjn',derivs_comp_covMat,derivs_comp_covMat)/(n_fisher_sims-1)/n_fisher_sims
 
         covMat_comp = self._compute_fisher_matrix(self.param_names)
         for i in range(n_params):
