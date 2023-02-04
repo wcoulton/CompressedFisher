@@ -367,6 +367,7 @@ class gaussianFisher(baseFisher):
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
             nSims = len(ids)
+            sims = None
             for i,id0 in enumerate(ids):
                 sim = self._deriv_mean_function(param_name,id0)
                 if i==0:
@@ -400,6 +401,7 @@ class gaussianFisher(baseFisher):
         if not self._has_deriv_sims:
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
+            sims = None
             nSims = len(ids)
             for i,id0 in enumerate(ids):
                 sim = self._deriv_covmat_function(param_name,id0)
@@ -685,7 +687,7 @@ class gaussianFisher(baseFisher):
         derivs_covMat = self._compute_deriv_mu_covmat(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
-        
+
         for i in range(n_params):
             for j in range(i+1):
                 fisher_err[i,j] = fisher_err[j,i] = np.trace(np.linalg.solve(self.covmat_fisher,derivs_covMat[i,j]))*self._hartlap_fisher

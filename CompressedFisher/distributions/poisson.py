@@ -11,9 +11,9 @@ class poissonFisher(baseFisher):
         The class provides tools for computing fisher forecasts when the data is described by a poisson distribution. 
         It is designed to handle data in the following format:
         A vector of measurements, x, of dimension, d, described
-        x ~ Poisson (\mu(\theta))
+        $x \sim Poisson (\mu(\theta))$
         where \mu is a vector of length d giving the poisson rate for each observation. The poisson rate can be different for each element
-        of x and has dependence on a set of parameters \theta.
+        of x and has dependence on a set of parameters $\theta.$
 
         A common workflow will look like this (see the docs and examples for details on the methods)
 
@@ -238,6 +238,7 @@ class poissonFisher(baseFisher):
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
             nSims = len(ids)
+            sims = None
             for i,id0 in enumerate(ids):
                 sim = self._deriv_rate_function(param_name,id0)
                 if i==0:
@@ -377,7 +378,7 @@ class poissonFisher(baseFisher):
         derivs_covMat = self._compute_deriv_rate_covar(params_names)
 
         fisher_err = np.zeros([n_params,n_params])
-        
+
         for i in range(n_params):
             for j in range(i+1):
                 fisher_err[i,j] = fisher_err[j,i] = np.sum(derivs_covMat[i,j]*self.variance_fisher/self.rate_comp/self.rate_comp)
