@@ -24,19 +24,20 @@ jobs:
         python-version: ${{ matrix.python-version }}
 
     - name: Install dependencies
-      run: |
-	pip install -r requirements.txt # Runs in the command line during this step
-	pip install pytest pytest-cov
-    - name: Install
+      run: pip install -r requirements.txt # Runs in the command line during this step
+
+    - name: Install tests
+      run: pip install pytest pytest-cov
+
+- name: Install
       run: pip install .
 
     - name: Test
-      run: pytest --cov
+      run: pytest --doctest-modules --cov
       
     - name: Codecov
       uses: codecov/codecov-action@v1
       with:
-        name: CompressedFisher-codecov
+        name: example-codecov
         token: 145b49dc-5f98-4573-aad9-e6a8b861c684 # PUT YOUR TOKEN HERE
         fail_ci_if_error: true
-
