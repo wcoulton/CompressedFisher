@@ -1,9 +1,12 @@
 Compressed Fisher
 =================
 
-[![]https://github.com/wcoulton/CompressedFisher/actions/workflows/exercise.yml/badge.svg)](https://github.com/wcoulton/CompressedFisher/actions)
-[![codecov](https://codecov.io/gh/wcoulton/CompressedFisher/branch/main/graph/badge.svg?token=4z1jy9YqIV)](https://codecov.io/gh/wcoulton/CompressedFisher)
-
+CompressedFisher)
+.. image:: https://github.com/wcoulton/CompressedFisher/actions/workflows/exercise.yml/badge.svg
+        :target: https://github.com/wcoulton/CompressedFisher/actions/workflows/exercise.yml
+.
+.. image:: https://codecov.io/gh/wcoulton/CompressedFisher/branch/main/graph/badge.svg?token=Z00BO0FR6Q
+        :target: https://codecov.io/gh/wcoulton/CompressedFisher
 
 **Compressed Fisher** is a Python library containing tools for testing if Fisher forecasts using simulated components are converged. The library contains tools to compute standard Fisher estimates, estimate the level of bias due to the finite number of simulations, and compute the compressed Fisher information, as described Coulton & Wandelt (2023) and `Coulton et al (2022b) <https://arxiv.org/abs/2206.15450>`_. 
 
