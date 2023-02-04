@@ -26,7 +26,7 @@ jobs:
       run: pip install -r requirements.txt # Runs in the command line during this step
 
     - name: Install tests
-      run: pip install pytest pytest-cov
+      run: pip install pytest pytest-cov sphinx-rtd-theme
 
     - name: Install
       run: pip install .
