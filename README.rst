@@ -18,7 +18,7 @@ Please refer to `the documentation <https://compressedfisher.readthedocs.io/>`_ 
 
 
 
-.. |Build Status| image:: https://github.com/wcoulton/CompressedFisher/actions/workflows/exercise.yml/badge.svg
-   :target:  https://github.com/wcoulton/CompressedFisher/actions/workflows/exercise.yml
+.. |Build Status| image:: https://github.com/wcoulton/CompressedFisher/actions/workflows/ci.yml/badge.svg
+   :target:  https://github.com/wcoulton/CompressedFisher/actions/workflows/ci.yml
 .. |Code Coverage| image:: https://codecov.io/gh/wcoulton/CompressedFisher/branch/main/graph/badge.svg?token=Z00BO0FR6Q
    :target: https://codecov.io/gh/wcoulton/CompressedFisher/branch/main
