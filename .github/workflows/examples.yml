@@ -2,7 +2,7 @@
 # For a detailed guide: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#about-yaml-syntax-for-workflows
 name: CompressedFisher Tests
 on:
-  - [push] # Run this workflow every time we push
+  - push # Run this workflow every time we push
 jobs:
   test:
     runs-on: ubuntu-latest
