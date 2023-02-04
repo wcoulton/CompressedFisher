@@ -16,3 +16,4 @@ Please refer to `the documentation <https://compressedfisher.readthedocs.io/>`_ 
    :target:  https://github.com/wcoulton/CompressedFisher/actions/workflows/ci.yml
 .. |Code Coverage| image:: https://codecov.io/gh/wcoulton/CompressedFisher/branch/main/graph/badge.svg?token=Z00BO0FR6Q
    :target: https://codecov.io/gh/wcoulton/CompressedFisher/branch/main
+
