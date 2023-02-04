@@ -1,3 +1,5 @@
+|Build Status| |Code Coverage|
+
 Compressed Fisher
 =================
 
@@ -13,3 +15,10 @@ CompressedFisher)
 Please refer to `the documentation <https://compressedfisher.readthedocs.io/>`_ or the examples provided in the `examples folder <https://github.com/wcoulton/CompressedFisher/tree/main/examples>`_ to learn how to get started.
 
 .. note::
+
+
+
+.. |Build Status| image:: https://github.com/wcoulton/CompressedFisher/actions/workflows/exercise.yml/badge.svg
+   :target:  https://github.com/wcoulton/CompressedFisher/actions/workflows/exercise.yml
+.. |Code Coverage| image:: https://codecov.io/gh/wcoulton/CompressedFisher/branch/main/graph/badge.svg?token=Z00BO0FR6Q
+   :target: https://codecov.io/gh/wcoulton/CompressedFisher/branch/main
