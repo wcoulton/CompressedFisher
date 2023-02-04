@@ -1,9 +1,8 @@
 # For an intro guide see: https://docs.github.com/en/actions/quickstart
 # For a detailed guide: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#about-yaml-syntax-for-workflows
-
 name: CompressedFisher Tests
 on:
-  - push # Run this workflow every time we push
+  - [push] # Run this workflow every time we push
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -29,7 +28,7 @@ jobs:
     - name: Install tests
       run: pip install pytest pytest-cov
 
-- name: Install
+    - name: Install
       run: pip install .
 
     - name: Test
