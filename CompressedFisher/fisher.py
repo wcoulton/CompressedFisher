@@ -414,7 +414,7 @@ class baseFisher(object):
         return np.median(results,axis=0)
 
 
-    def compute_combined_fisher_forecast_wShuffles(self,params_names,compress_fraction,nShuffles=10,verbose=False):
+    def compute_combined_fisher_forecast_wShuffle(self,params_names,compress_fraction,nShuffles=10,verbose=False):
         """ 
         Computes the combined fisher parameter constraints and this version uses repeated estimates (with the number given by nShuffles)
         where for each repeat the sims are shuffled and redivded between the compression and fisher estimation. 

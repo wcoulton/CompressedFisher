@@ -289,3 +289,43 @@ def test_id_splitting():
     assert(ids_0 not in ids_a)
 
 
+
+def test_FisherBias():
+    """
+    Verify that the standard Fisher bias is correctly estimated
+    """
+    nSimsCovMat = 20000
+    nSims_deriv = 1000
+
+    covmat_sims = generateSims(params_fid,nSimsCovMat)
+
+    fisher_true = fisherInformationTheory(params_fid)
+    dict_param_steps = {parameter_names[i]:delta_params[i] for i in range(len(params_fid))}
+    dict_deriv_sims = generate_deriv_sims(parameter_names,params_fid,delta_params,nSims=nSims_deriv)
+    cFisher = CompressedFisher.poissonFisher(parameter_names,nSims_deriv,deriv_finite_dif_accuracy=2)
+    cFisher.initailize_variance(covmat_sims)
+
+    cFisher.initailize_deriv_sims(dic_deriv_sims=dict_deriv_sims,dict_param_steps=dict_param_steps)
+    cFisher.generate_deriv_sim_splits(.5)
+    np.isclose(fisher_true,cFisher._compute_fisher_matrix(parameter_names)-cFisher._compute_fisher_matrix_error(parameter_names),rtol=2/np.sqrt(.5*nSims_deriv))
+
+
+def test_compressedFisherBias():
+    """
+    Verify that the compressed Fisher bias is correctly estimated
+    """
+    nSimsCovMat = 20000
+    nSims_deriv = 1000
+
+    covmat_sims = generateSims(params_fid,nSimsCovMat)
+
+    fisher_true = fisherInformationTheory(params_fid)
+    dict_param_steps = {parameter_names[i]:delta_params[i] for i in range(len(params_fid))}
+    dict_deriv_sims = generate_deriv_sims(parameter_names,params_fid,delta_params,nSims=nSims_deriv)
+    cFisher = CompressedFisher.poissonFisher(parameter_names,nSims_deriv,deriv_finite_dif_accuracy=2)
+    cFisher.initailize_variance(covmat_sims)
+
+    cFisher.initailize_deriv_sims(dic_deriv_sims=dict_deriv_sims,dict_param_steps=dict_param_steps)
+    cFisher.generate_deriv_sim_splits(.5)
+    np.isclose(fisher_true,cFisher._compute_compressed_fisher_matrix(parameter_names)-cFisher._compute_compressed_fisher_matrix_error(parameter_names),rtol=2/np.sqrt(.5*nSims_deriv))
+

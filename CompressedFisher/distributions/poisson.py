@@ -238,7 +238,7 @@ class poissonFisher(baseFisher):
             if ids is None:
                 ids = np.arange(self.n_sims_derivs)
             nSims = len(ids)
-            sims = None
+            sims = []
             for i,id0 in enumerate(ids):
                 sim = self._deriv_rate_function(param_name,id0)
                 if i==0:

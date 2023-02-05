@@ -272,6 +272,26 @@ def test_combinedFisherForecast():
     assert(np.all(np.isclose(np.linalg.inv(fisher_true),const_combined_cFish)))
 
 
+def test_compresedFisherForecast_wShuffle():
+    """
+    Test the compressed fisher forecast calculation
+    """
+    cFisher =  initializeFisher()
+    fisher_true = fisherInformationTheory(params_fid)
+    const_comp_cFish = cFisher.compute_compressed_fisher_forecast_wShuffle(parameter_names,.5)
+    assert(np.all(np.isclose(np.linalg.inv(fisher_true),const_comp_cFish)))
+
+
+def test_combinedFisherForecast_wShuffle():
+    """
+    Test the combined fisher forecast calculation
+    """
+    cFisher =  initializeFisher()
+    fisher_true = fisherInformationTheory(params_fid)
+    const_combined_cFish = cFisher.compute_combined_fisher_forecast_wShuffle(parameter_names,.5)
+    assert(np.all(np.isclose(np.linalg.inv(fisher_true),const_combined_cFish)))
+
+
 def test_id_splitting():
     """
     Verify that the ids are correctly split into two disjoint sets
@@ -284,3 +304,53 @@ def test_id_splitting():
     assert(ids_0 not in ids_a)
 
 
+
+def test_FisherBias():
+    """
+    Verify that the standard Fisher bias is correctly estimated
+    """
+    nSimsCovMat = 20000
+    nSims_deriv = 1000
+
+    covmat_sims = generateSims(params_fid,nSimsCovMat)
+
+    fisher_true = fisherInformationTheory(params_fid)
+    dict_param_steps = {parameter_names[i]:delta_params[i] for i in range(len(params_fid))}
+    dict_deriv_sims = generate_deriv_sims(parameter_names,params_fid,delta_params,nSims=nSims_deriv)
+    cFisher = CompressedFisher.gaussianFisher(parameter_names,nSims_deriv,include_covmat_param_depedence=False,deriv_finite_dif_accuracy=2)
+    cFisher.initailize_covmat(covmat_sims,store_covmat_sims=True)
+    cFisher.initailize_mean(covmat_sims)
+    cFisher.initailize_deriv_sims(dic_deriv_sims=dict_deriv_sims,dict_param_steps=dict_param_steps)
+    cFisher.generate_deriv_sim_splits(.5)
+    cFisher.generate_covmat_sim_splits(.5) # Test division of cov mat sims too..
+    np.isclose(fisher_true,cFisher._compute_fisher_matrix(parameter_names)-cFisher._compute_fisher_matrix_error(parameter_names),rtol=2/np.sqrt(.5*nSims_deriv))
+
+
+def test_compressedFisherBias():
+    """
+    Verify that the compressed Fisher bias is correctly estimated
+    """
+    nSimsCovMat = 20000
+    nSims_deriv = 1000
+
+    covmat_sims = generateSims(params_fid,nSimsCovMat)
+
+    fisher_true = fisherInformationTheory(params_fid)
+    dict_param_steps = {parameter_names[i]:delta_params[i] for i in range(len(params_fid))}
+    dict_deriv_sims = generate_deriv_sims(parameter_names,params_fid,delta_params,nSims=nSims_deriv)
+    cFisher = CompressedFisher.gaussianFisher(parameter_names,nSims_deriv,include_covmat_param_depedence=False,deriv_finite_dif_accuracy=2)
+    cFisher.initailize_covmat(covmat_sims)
+    cFisher.initailize_mean(covmat_sims)
+    cFisher.initailize_deriv_sims(dic_deriv_sims=dict_deriv_sims,dict_param_steps=dict_param_steps)
+    cFisher.generate_deriv_sim_splits(.5)
+    np.isclose(fisher_true,cFisher._compute_compressed_fisher_matrix(parameter_names)-cFisher._compute_compressed_fisher_matrix_error(parameter_names),rtol=2/np.sqrt(.5*nSims_deriv))
+
+
+def test_splineweights():
+    """
+    Test that the spline weights are correctly updated
+    """
+
+    cFisher =  initializeFisher()
+    cFisher.initailize_spline_weights(CompressedFisher.fisher.central_difference_weights[4])
+    assert(np.all(cFisher._deriv_finite_dif_weights==CompressedFisher.fisher.central_difference_weights[4]))
